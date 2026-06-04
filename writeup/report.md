@@ -357,8 +357,20 @@ compensate for a larger or more structured cargo.
 
 This project does **not** demonstrate that the resulting model can predict the
 efficiency of an LNP for a cargo class it has never seen. The LOPO result makes that
-clear: even within mRNA, the model fails to transfer across study boundaries. What
-this work **does** show is two things. First, on a within-study basis, ionizable-
+clear: even within mRNA, the model fails to transfer across study boundaries.
+
+**The LOPO failure is not a featurization artifact.** The 57 features (see §3.1)
+explicitly avoid one-hot encoding ionizable-lipid identity — that approach would
+have been hopeless given 84% singleton lipids — and instead represent each
+ionizable lipid by 14 pre-computed RDKit descriptors (LogP, MW, TPSA, rotatable
+bonds, nitrogen count, etc.) plus 3 binary substructure flags. These are
+*chemistry features that should transfer across labs in principle*: a lipid with
+LogP 7.2 in lab A's library and a lipid with LogP 7.2 in lab B's library produce
+identical numeric inputs to the model. That the model nevertheless fails LOPO with
+this featurization is the stronger version of the result — it points to deeper
+publication-level structure than just "different labs use different lipid names."
+
+What this work **does** show is two things. First, on a within-study basis, ionizable-
 lipid chemistry — particularly flexibility, polar surface area, nitrogen content, and
 hydrophobicity — is the dominant feature group driving the predictions of a tuned
 XGBoost on LNPDB; secondary contributions come from composition mol% (especially PEG
@@ -371,15 +383,21 @@ contribution.
 
 ### 5.2 Sources of the LOPO gap
 
-The 0.44-point gap between random-CV and LOPO R² is the central limitation. Several
-non-exclusive explanations are likely:
+The 0.44-point gap between random-CV and LOPO R² is the central limitation. Given
+the rich (chemistry-based) featurization in §3.1, naïve explanations like "unseen
+lipid names" do not apply. Several non-exclusive structural explanations remain:
 
+- **Each lab occupies a narrow region of chemistry space.** Even though our
+  features are continuous RDKit descriptors that should generalize in principle,
+  most labs synthesize ionizable lipids in a single structural family — a
+  particular head-group type, a particular linker (ester / amide / disulfide),
+  characteristic tail-length distributions. Under random CV the model sees
+  examples from every family; under LOPO it routinely sees a held-out family
+  whose descriptor values sit outside the convex hull of training data. The
+  model is effectively extrapolating outside the training distribution.
 - **Composition recipe clustering** (Section 2.4 (ii)): the dataset is dense around
   two canonical formulations and sparse elsewhere. A held-out publication may use a
   composition that the model has effectively never been trained on.
-- **Lab-specific ionizable lipid libraries**: 84% of ionizable lipids are singletons,
-  and they cluster by paper — held-out publications often contain entire structural
-  families absent from training.
 - **Study-level assay/normalization differences** that the within-method z-score does
   not fully absorb (e.g., different cell-line passages, different luciferase
   substrates, different timing).
@@ -424,12 +442,16 @@ In rough order of likely impact:
 
 ### 5.5 Closing
 
-The most honest one-sentence summary of this work: *LNPDB is a useful dataset for
-generating composition hypotheses about LNP delivery, the model trained on it
-identifies ionizable-lipid chemistry as the dominant within-study lever and PEG /
-IL-loading as the top circRNA-regime levers, and the cross-study generalization gap
-is wide enough that any of those hypotheses needs experimental validation before
-being trusted.*
+The most honest one-sentence summary of this work: *Even with chemistry-based
+featurization that should transfer in principle (RDKit descriptors of ionizable
+lipids, not categorical identity), the model fails leave-one-publication-out on
+LNPDB — random-CV R² 0.33 collapses to LOPO R² −0.11 — implying publication-level
+confounding in this dataset is structural, with each lab occupying a narrow region
+of chemistry space; the within-study interpretation findings — ionizable-lipid
+chemistry as the dominant lever overall, and PEG mol% plus IL loading rising to
+the top in the high-mass-ratio "circRNA-like" regime — are useful as hypotheses
+but need experimental validation before being trusted, especially across the
+recipe boundaries the LOPO test surfaces.*
 
 ## 6. References
 
